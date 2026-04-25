@@ -1,28 +1,18 @@
-`timescale 1ns/1ps
-
-module data_mem #(
-    parameter XLEN = 32,
-    parameter DEPTH_WORDS = 256
-) (
-    input  wire             clk,
-    input  wire             mem_read,
-    input  wire             mem_write,
-    input  wire [XLEN-1:0]  addr,
-    input  wire [XLEN-1:0]  wdata,
-    output wire [XLEN-1:0]  rdata
+module datamem(
+    input clk, WE,
+    input [31:0] A, WD,
+    output reg [31:0] RD
 );
-    reg [XLEN-1:0] mem [0:DEPTH_WORDS-1];
 
-    integer i;
-    initial begin
-        for (i = 0; i < DEPTH_WORDS; i = i + 1)
-            mem[i] = {XLEN{1'b0}};
-    end
+reg [31:0] mem [1023:0];
 
-    always @(posedge clk) begin
-        if (mem_write)
-            mem[addr[XLEN-1:2]] <= wdata;
-    end
+always @(posedge clk) begin
+    if (WE)
+        mem[A[11:2]] <= WD;
 
-    assign rdata = mem_read ? mem[addr[XLEN-1:2]] : {XLEN{1'b0}};
+    RD <= mem[A[11:2]];
+end
+initial begin
+    mem[1] = 32'hDEADBEEF;  // Address 4 → index 1
+end
 endmodule
