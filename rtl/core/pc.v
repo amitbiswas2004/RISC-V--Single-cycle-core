@@ -1,18 +1,15 @@
-`timescale 1ns/1ps
-
-module pc #(
-    parameter XLEN = 32,
-    parameter RESET_PC = 32'h0000_0000
-) (
-    input  wire             clk,
-    input  wire             rst_n,
-    input  wire [XLEN-1:0]  pc_next,
-    output reg  [XLEN-1:0]  pc_curr
+module pc(
+    input [31:0] PC_next,
+    input rst,
+    input clk,
+    output reg [31:0] PC
 );
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            pc_curr <= RESET_PC;
-        else
-            pc_curr <= pc_next;
-    end
+
+always @(posedge clk or posedge rst) begin
+    if (!rst)
+        PC <= 32'h00000000;   // reset PC to 0
+    else
+        PC <= PC_next;        // update PC on clock edge
+end
+
 endmodule
