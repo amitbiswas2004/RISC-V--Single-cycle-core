@@ -1,23 +1,26 @@
-`timescale 1ns/1ps
-
-module instr_mem #(
-    parameter XLEN = 32,
-    parameter DEPTH_WORDS = 256,
-    parameter INIT_FILE = ""
-) (
-    input  wire [XLEN-1:0] addr,
-    output wire [31:0]     instruction
+module instr_mem(
+    input [31:0] A,
+    input rst,
+    output [31:0] RD
 );
-    reg [31:0] mem [0:DEPTH_WORDS-1];
 
-    integer i;
-    initial begin
-        for (i = 0; i < DEPTH_WORDS; i = i + 1)
-            mem[i] = 32'h0000_0013; // NOP = addi x0, x0, 0
+reg [31:0] mem [0:1023];
 
-        if (INIT_FILE != "")
-            $readmemh(INIT_FILE, mem);
-    end
+// Initialize instructions
+initial begin
+    // Program:
+    // x1 = 4
+    // x2 = MEM[x1 + 0]
 
-    assign instruction = mem[addr[XLEN-1:2]];
+    mem[0] = 32'h00400093; // addi x1, x0, 4
+    mem[1] = 32'h0000A103; // lw   x2, 0(x1)
+
+    // Optional NOPs
+    mem[2] = 32'h00000013;
+    mem[3] = 32'h00000013;
+end
+
+// Instruction fetch (no reset blocking)
+assign RD = mem[A[31:2]];
+
 endmodule
