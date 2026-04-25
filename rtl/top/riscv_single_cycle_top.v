@@ -1,126 +1,111 @@
-`timescale 1ns/1ps
+`include "PC.v" 
+`include "Instruction_memory.v" 
+`include "registers.v" 
+`include "sign_extender.v" 
+`include "ALU.v" 
+`include "alu_decoder.v" 
+`include "data_memory.v" 
+`include "PC_adder.v"
+`include "control_unit_top.v"
+`include "main_decoder.v"
 
-module riscv_single_cycle_top #(
-    parameter XLEN = 32,
-    parameter IMEM_DEPTH_WORDS = 256,
-    parameter DMEM_DEPTH_WORDS = 256,
-    parameter IMEM_INIT_FILE = ""
-) (
-    input  wire clk,
-    input  wire rst_n
+
+module single_cycle_top(
+    input clk,
+    input rst
 );
-    // =========================
-    // Fetch stage wires
-    // =========================
-    wire [XLEN-1:0] pc_curr;
-    wire [XLEN-1:0] pc_next;
-    wire [31:0]     instruction;
 
-    // =========================
-    // Decode stage wires
-    // =========================
-    wire [6:0] opcode = instruction[6:0];
-    wire [4:0] rd     = instruction[11:7];
-    wire [2:0] funct3 = instruction[14:12];
-    wire [4:0] rs1    = instruction[19:15];
-    wire [4:0] rs2    = instruction[24:20];
-    wire [6:0] funct7 = instruction[31:25];
+wire [31:0] PC_top, RD_instruction, RD1_top, RD2_top;
+wire [31:0] imm_extend_top, ALUresult, readData, PC_plus4;
+wire [2:0] alu_contol_top;
 
-    wire [XLEN-1:0] rs1_data;
-    wire [XLEN-1:0] rs2_data;
-    wire [XLEN-1:0] imm_ext;
+wire Regwrite, Alusrc, Memwrite, Resultsrc;
+wire zero;
 
-    // =========================
-    // Control wires
-    // =========================
-    wire        reg_write;
-    wire        alu_src_imm;
-    wire        mem_read;
-    wire        mem_write;
-    wire        wb_sel_mem;
-    wire [1:0]  alu_op_main;
-    wire [2:0]  alu_op;
+wire [31:0] SrcB, WD3;
 
-    // =========================
-    // Execute / Memory / WB wires
-    // =========================
-    wire [XLEN-1:0] alu_in_b;
-    wire [XLEN-1:0] alu_result;
-    wire [XLEN-1:0] dmem_rdata;
-    wire [XLEN-1:0] wb_data;
+// PC
+pc pc_module(
+    .clk(clk),
+    .rst(rst),
+    .PC(PC_top),
+    .PC_next(PC_plus4)
+);
 
-    // Program counter update: no branch/jump yet.
-    assign pc_next = pc_curr + 32'd4;
+// Instruction Memory
+instr_mem IM(
+    .rst(rst),
+    .A(PC_top),
+    .RD(RD_instruction)
+);
 
-    pc #(.XLEN(XLEN)) u_pc (
-        .clk(clk),
-        .rst_n(rst_n),
-        .pc_next(pc_next),
-        .pc_curr(pc_curr)
-    );
+// Register File
+register regis(
+    .clk(clk),
+    .rst(rst),
+    .WE3(Regwrite),
+    .WD3(WD3),
+    .RD1(RD1_top),
+    .RD2(RD2_top),
+    .A1(RD_instruction[19:15]),
+    .A2(RD_instruction[24:20]),
+    .A3(RD_instruction[11:7])
+);
 
-    instr_mem #(
-        .XLEN(XLEN),
-        .DEPTH_WORDS(IMEM_DEPTH_WORDS),
-        .INIT_FILE(IMEM_INIT_FILE)
-    ) u_imem (
-        .addr(pc_curr),
-        .instruction(instruction)
-    );
+// Sign Extend
+sign_extend sign_extend(
+    .in(RD_instruction),
+    .imm_extension(imm_extend_top)
+);
 
-    control_unit u_control (
-        .opcode(opcode),
-        .reg_write(reg_write),
-        .alu_src_imm(alu_src_imm),
-        .mem_read(mem_read),
-        .mem_write(mem_write),
-        .wb_sel_mem(wb_sel_mem),
-        .alu_op_main(alu_op_main)
-    );
+// ALU input MUX
+assign SrcB = (Alusrc) ? imm_extend_top : RD2_top;
 
-    sign_extend #(.XLEN(XLEN)) u_sign_extend (
-        .instruction(instruction),
-        .imm_ext(imm_ext)
-    );
+// ALU
+alu ALU(
+    .A(RD1_top),
+    .B(SrcB),
+    .Alucontrol(alu_contol_top),
+    .Z(),
+    .N(),
+    .C(),
+    .V(),
+    .result(ALUresult)
+);
 
-    alu_decoder u_alu_decoder (
-        .alu_op_main(alu_op_main),
-        .funct3(funct3),
-        .funct7(funct7),
-        .alu_op(alu_op)
-    );
+// Control Unit
+control_unit control_unit_top(
+    .zero(zero),
+    .op(RD_instruction[6:0]),
+    .funct3(RD_instruction[14:12]),
+    .funct7(RD_instruction[30]),
+    .op5(RD_instruction[5]),
+    .Regwrite(Regwrite),
+    .Alusrc(Alusrc),
+    .Memwrite(Memwrite),
+    .Resultsrc(Resultsrc),
+    .PCsrc(),
+    .Immsrc(),
+    .Alucontrol(alu_contol_top)
+);
 
-    register_file #(.XLEN(XLEN)) u_regfile (
-        .clk(clk),
-        .we(reg_write),
-        .rs1_addr(rs1),
-        .rs2_addr(rs2),
-        .rd_addr(rd),
-        .rd_data(wb_data),
-        .rs1_data(rs1_data),
-        .rs2_data(rs2_data)
-    );
+// Data Memory
+datamem datamem(
+    .clk(clk),
+    .WE(Memwrite),
+    .A(ALUresult),
+    .WD(RD2_top),
+    .RD(readData)
+);
 
-    assign alu_in_b = alu_src_imm ? imm_ext : rs2_data;
+// Writeback MUX
+assign WD3 = (Resultsrc) ? readData : ALUresult;
 
-    alu #(.XLEN(XLEN)) u_alu (
-        .a(rs1_data),
-        .b(alu_in_b),
-        .alu_op(alu_op),
-        .y(alu_result)
-    );
+// PC + 4
+PC_adder add(
+    .a(PC_top),
+    .b(32'd4),
+    .c(PC_plus4)
+);
 
-    data_mem #(
-        .XLEN(XLEN),
-        .DEPTH_WORDS(DMEM_DEPTH_WORDS)
-    ) u_dmem (
-        .clk(clk),
-        .mem_read(mem_read),
-        .mem_write(mem_write),
-        .addr(alu_result),
-        .wdata(rs2_data),
-        .rdata(dmem_rdata)
-    );
-
-    assign wb_data = wb_sel_mem ? dmem_rdata : alu_result;
 endmodule
