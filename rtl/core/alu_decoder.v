@@ -1,32 +1,34 @@
-`timescale 1ns/1ps
+module alu_decoder(
 
-module alu_decoder (
-    input  wire [1:0] alu_op_main,
-    input  wire [2:0] funct3,
-    input  wire [6:0] funct7,
-    output reg  [2:0] alu_op
+    input op5, funct7,
+    input [1:0] Aluop,
+    input [2:0] funct3,
+    output reg [2:0] Alucontrol
+
 );
-    localparam ALU_ADD = 3'b000;
-    localparam ALU_SUB = 3'b001;
-    localparam ALU_AND = 3'b010;
-    localparam ALU_OR  = 3'b011;
 
-    always @(*) begin
-        case (alu_op_main)
-            2'b00: alu_op = ALU_ADD; // load/store address calc
-            2'b01: alu_op = ALU_SUB; // branch compare (future)
-            2'b10: begin
-                // I-type / R-type decode hook for future scaling.
-                case (funct3)
-                    3'b000: alu_op = ALU_ADD; // addi / add / sub (with funct7)
-                    3'b111: alu_op = ALU_AND;
-                    3'b110: alu_op = ALU_OR;
-                    default: alu_op = ALU_ADD;
-                endcase
-                if ((funct3 == 3'b000) && (funct7 == 7'b0100000))
-                    alu_op = ALU_SUB;
-            end
-            default: alu_op = ALU_ADD;
-        endcase
-    end
+wire [1:0] concatenation;
+assign concatenation = {op5, funct7};
+
+always @(*) begin
+    case (Aluop)
+
+        2'b00: Alucontrol = 3'b000; // Add
+        2'b01: Alucontrol = 3'b001; // Subtract
+
+        2'b10: begin
+            case (funct3)
+                3'b000: Alucontrol = (concatenation == 2'b11) ? 3'b001 : 3'b000;
+                3'b010: Alucontrol = 3'b101;
+                3'b110: Alucontrol = 3'b011;
+                3'b111: Alucontrol = 3'b010;
+                default: Alucontrol = 3'b000;
+            endcase
+        end
+
+        default: Alucontrol = 3'b000;
+
+    endcase
+end
+
 endmodule
