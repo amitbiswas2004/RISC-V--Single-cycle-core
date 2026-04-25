@@ -1,31 +1,25 @@
-`timescale 1ns/1ps
-
-module register_file #(
-    parameter XLEN = 32,
-    parameter REG_COUNT = 32
-) (
-    input  wire                      clk,
-    input  wire                      we,
-    input  wire [4:0]                rs1_addr,
-    input  wire [4:0]                rs2_addr,
-    input  wire [4:0]                rd_addr,
-    input  wire [XLEN-1:0]           rd_data,
-    output wire [XLEN-1:0]           rs1_data,
-    output wire [XLEN-1:0]           rs2_data
+module register(
+    input [4:0] A1, A2, A3,
+    input [31:0] WD3,
+    input clk, rst, WE3,
+    output [31:0] RD1, RD2
 );
-    reg [XLEN-1:0] regs [0:REG_COUNT-1];
 
-    integer i;
-    initial begin
-        for (i = 0; i < REG_COUNT; i = i + 1)
-            regs[i] = {XLEN{1'b0}};
+reg [31:0] reg_files [31:0];
+integer i;
+
+// Read ports (combinational)
+assign RD1 = (A1 == 5'b00000) ? 32'b0 : reg_files[A1];
+assign RD2 = (A2 == 5'b00000) ? 32'b0 : reg_files[A2];
+
+// Write + reset
+always @(posedge clk) begin
+    if (!rst) begin
+        for (i = 0; i < 32; i = i + 1)
+            reg_files[i] <= 32'b0;
+    end else if (WE3 && (A3 != 5'b00000)) begin
+        reg_files[A3] <= WD3;
     end
+end
 
-    always @(posedge clk) begin
-        if (we && (rd_addr != 5'd0))
-            regs[rd_addr] <= rd_data;
-    end
-
-    assign rs1_data = (rs1_addr == 5'd0) ? {XLEN{1'b0}} : regs[rs1_addr];
-    assign rs2_data = (rs2_addr == 5'd0) ? {XLEN{1'b0}} : regs[rs2_addr];
 endmodule
